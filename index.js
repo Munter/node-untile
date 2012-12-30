@@ -65,7 +65,7 @@ Seq(files)
 
             var img = new Image;
             img.src = src;
-            ctx.drawImage(img, x, y, img.width, img.height);
+            ctx.drawImage(img, x - left, y - top, img.width, img.height);
             cb();
         });
     })
