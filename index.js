@@ -3,6 +3,7 @@
 var Canvas = require('canvas'),
     Image = Canvas.Image,
     fs = require('fs'),
+    glob = require('glob'),
     Seq = require('seq'),
     optimist = require('optimist'),
     options = optimist
@@ -22,7 +23,7 @@ var Canvas = require('canvas'),
             demand: true
         })
         .argv,
-    files = options._,
+    dir = options._,
     top = Infinity,
     bottom = 0,
     left = Infinity,
@@ -35,45 +36,48 @@ if (options.h) {
     process.exit(1);
 }
 
-files.forEach(function (fileName) {
-    matches = fileName.match(/(\d+)_(\d+)/),
-        x = Number(matches[1]);
-        y = Number(matches[2]);
+glob(dir + '/**/*.jpg', function (error, fileNames) {
+    fileNames.forEach(function (fileName) {
+        matches = fileName.match(/(\d+)_(\d+)/),
+            x = Number(matches[1]);
+            y = Number(matches[2]);
 
-    top = Math.min(top, y);
-    bottom = Math.max(bottom, y + options.height);
-    left = Math.min(left, x);
-    right = Math.max(right, x + options.width);
-})
-
-canvas = new Canvas(right - left, bottom - top),
-ctx = canvas.getContext('2d');
-
-Seq(files)
-    .parEach(function (fileName) {
-        var cb = this;
-
-        fs.readFile(__dirname + '/' + fileName, function(err, src){
-            if (err) {
-                throw err
-            };
-            var matches = fileName.match(/(\d+)_(\d+)/),
-                x = Number(matches[1]),
-                y = Number(matches[2]);
-
-            process.stdout.write('.');
-
-            var img = new Image;
-            img.src = src;
-            ctx.drawImage(img, x - left, y - top, img.width, img.height);
-            cb();
-        });
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y + options.height);
+        left = Math.min(left, x);
+        right = Math.max(right, x + options.width);
     })
-    .seq(function () {
-        var cb = this;
-        process.stdout.write('\n');
-        fs.writeFile('map.png', canvas.toBuffer(), function () {
-            console.log('map.png ('+ (right - left) + 'x'+ (bottom - top) +') written');
-            cb();
+
+    canvas = new Canvas(right - left, bottom - top),
+    ctx = canvas.getContext('2d');
+
+    Seq(fileNames)
+        .parEach(function (fileName) {
+            var cb = this;
+
+            fs.readFile(__dirname + '/' + fileName, function(err, src){
+                if (err) {
+                    throw err
+                };
+                var matches = fileName.match(/(\d+)_(\d+)/),
+                    x = Number(matches[1]),
+                    y = Number(matches[2]);
+
+                process.stdout.write('.');
+
+                var img = new Image;
+                img.src = src;
+                ctx.drawImage(img, x - left, y - top, img.width, img.height);
+                cb();
+            });
+        })
+        .seq(function () {
+            var cb = this;
+            process.stdout.write('\n');
+            fs.writeFile('map.png', canvas.toBuffer(), function () {
+                console.log('map.png ('+ (right - left) + 'x'+ (bottom - top) +') written');
+                cb();
+            });
         });
-    });
+});
+
