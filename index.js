@@ -23,11 +23,13 @@ var Canvas = require('canvas'),
             demand: true
         })
         .argv,
-    dir = options._,
+    dir = options._[0],
     top = Infinity,
-    bottom = 0,
+    bottom = -Infinity,
     left = Infinity,
-    right = 0,
+    right = -Infinity,
+    maxId = -Infinity,
+    minId = Infinity,
     canvas,
     ctx;
 
@@ -36,34 +38,47 @@ if (options.h) {
     process.exit(1);
 }
 
-glob(dir + '/**/*.jpg', function (error, fileNames) {
-    fileNames.forEach(function (fileName) {
-        matches = fileName.match(/(\d+)_(\d+)/),
-            x = Number(matches[1]);
-            y = Number(matches[2]);
+console.log('reading', dir);
+
+fs.readdir(dir, function (error, fileNames) {
+    console.log('Found ' + fileNames.length + ' files');
+    var fileObjs = fileNames.map(function (fileName) {
+        var matches = fileName.match(/(\d+)_(-?\d+)_(-?\d+)/),
+            id = Number(matches[1]),
+            x = Number(matches[2]),
+            y = Number(matches[3]);
 
         top = Math.min(top, y);
         bottom = Math.max(bottom, y + options.height);
         left = Math.min(left, x);
         right = Math.max(right, x + options.width);
+
+	maxId = Math.max(maxId, id);
+	minId = Math.min(minId, id);
+
+        return {
+            name: fileName,
+            id: id,
+            x: x,
+            y: y
+        };
     })
+    console.log(minId, maxId);
+    console.log('Dimensions: ', right - left, bottom - top);
 
     canvas = new Canvas(right - left, bottom - top),
     ctx = canvas.getContext('2d');
 
-    Seq(fileNames)
-        .parEach(function (fileName) {
+    Seq(fileObjs)
+        .parEach(function (fileObj) {
             var cb = this;
 
-            fs.readFile(__dirname + '/' + fileName, function(err, src){
+            process.stdout.write('.');
+
+            fs.readFile(fileObj.name, function(err, src){
                 if (err) {
                     throw err
                 };
-                var matches = fileName.match(/(\d+)_(\d+)/),
-                    x = Number(matches[1]),
-                    y = Number(matches[2]);
-
-                process.stdout.write('.');
 
                 var img = new Image;
                 img.src = src;
