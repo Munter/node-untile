@@ -1,6 +1,6 @@
 {
   "name": "node-untile",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Combines map tiles into a large map",
   "author": "Peter Müller <munter@fumle.dk>",
   "main": "index.js",
