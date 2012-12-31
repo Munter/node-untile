@@ -4,7 +4,7 @@ var Canvas = require('canvas'),
     Image = Canvas.Image,
     fs = require('fs'),
     glob = require('glob'),
-    Seq = require('seq'),
+    queue = require('queue-async'),
     optimist = require('optimist'),
     options = optimist
         .usage('$0 --width --height <images>')
@@ -57,7 +57,7 @@ fs.readdir(dir, function (error, fileNames) {
 	minId = Math.min(minId, id);
 
         return {
-            name: fileName,
+            path: [dir, fileName].join('/').replace(/\/+/, '/'),
             id: id,
             x: x,
             y: y
@@ -66,33 +66,35 @@ fs.readdir(dir, function (error, fileNames) {
     console.log(minId, maxId);
     console.log('Dimensions: ', right - left, bottom - top);
 
-    canvas = new Canvas(right - left, bottom - top),
+    canvas = new Canvas(Math.sqrt(fileNames.length) * options.width, Math.sqrt(fileNames.length) * options.height),
     ctx = canvas.getContext('2d');
 
-    Seq(fileObjs)
-        .parEach(function (fileObj) {
-            var cb = this;
 
-            process.stdout.write('.');
-
-            fs.readFile(fileObj.name, function(err, src){
-                if (err) {
-                    throw err
-                };
-
-                var img = new Image;
-                img.src = src;
-                ctx.drawImage(img, x - left, y - top, img.width, img.height);
-                cb();
-            });
-        })
-        .seq(function () {
-            var cb = this;
-            process.stdout.write('\n');
-            fs.writeFile('map.png', canvas.toBuffer(), function () {
-                console.log('map.png ('+ (right - left) + 'x'+ (bottom - top) +') written');
-                cb();
-            });
+var q = queue(3);
+fileObjs.forEach(function (fileObj) {
+    q.defer(function (callback) {
+        fs.readFile(fileObj.path, function (error, data) {
+            var img = new Image();
+            img.onload = function () {
+console.log(fileObj.path);
+                var x = fileObj.id % 750;
+                var y = (fileObj.id - x) / 750;
+                ctx.drawImage(img, x * options.width, y * options.height, img.width, img.height);
+                process.stdout.write('.');
+                callback();
+            }
+            img.onerror = function (e) {
+console.log(fileObj.path, img, data);
+                throw e;
+            }
+            img.src = data;
         });
+    });
+});
+q.awaitAll(function () {
+    fs.writeFile('map.png', canvas.toBuffer(), function () {
+        console.log('map.png ('+ (right - left) + 'x'+ (bottom - top) +') written');
+    });
 });
 
+});

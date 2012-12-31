@@ -11,7 +11,7 @@
     "canvas": "~0.13.1",
     "glob": "*",
     "optimist": "*",
-    "seq": "*"
+    "queue-async": "*"
   },
   "repository": "",
   "keywords": [
