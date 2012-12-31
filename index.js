@@ -3,8 +3,8 @@
 var Canvas = require('canvas'),
     Image = Canvas.Image,
     fs = require('fs'),
-    glob = require('glob'),
-    Seq = require('seq'),
+    Progress = require('progress'),
+    queue = require('queue-async'),
     optimist = require('optimist'),
     options = optimist
         .usage('$0 --width --height <images>')
@@ -23,11 +23,13 @@ var Canvas = require('canvas'),
             demand: true
         })
         .argv,
-    dir = options._,
+    dir = options._[0],
     top = Infinity,
-    bottom = 0,
+    bottom = -Infinity,
     left = Infinity,
-    right = 0,
+    right = -Infinity,
+    maxId = -Infinity,
+    minId = Infinity,
     canvas,
     ctx;
 
@@ -35,49 +37,65 @@ if (options.h) {
     optimist.showHelp();
     process.exit(1);
 }
+console.log('Reading tile directory');
+fs.readdir(dir, function (error, fileNames) {
+    var fileObjs = fileNames.map(function (fileName) {
+            var matches = fileName.match(/([\w\d]+)_(-?\d+)_(-?\d+)/),
+                id = Number(matches[1]),
+                x = Number(matches[2]),
+                y = Number(matches[3]);
 
-glob(dir + '/**/*.jpg', function (error, fileNames) {
-    fileNames.forEach(function (fileName) {
-        matches = fileName.match(/(\d+)_(\d+)/),
-            x = Number(matches[1]);
-            y = Number(matches[2]);
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y + options.height);
+            left = Math.min(left, x);
+            right = Math.max(right, x + options.width);
 
-        top = Math.min(top, y);
-        bottom = Math.max(bottom, y + options.height);
-        left = Math.min(left, x);
-        right = Math.max(right, x + options.width);
-    })
+            maxId = Math.max(maxId, id);
+            minId = Math.min(minId, id);
 
-    canvas = new Canvas(right - left, bottom - top),
+            return {
+                path: [dir, fileName].join('/').replace(/\/+/, '/'),
+                id: id,
+                x: x,
+                y: y
+            };
+        }),
+        width = Math.sqrt(fileNames.length) * options.width,
+        height = Math.sqrt(fileNames.length) * options.height;
+
+    canvas = new Canvas(width, height),
     ctx = canvas.getContext('2d');
 
-    Seq(fileNames)
-        .parEach(function (fileName) {
-            var cb = this;
+    var bar = new Progress('Injecting tiles: :current of :total [:bar] :percent :etas', {
+        complete: '=',
+        incomplete: ' ',
+        width: 30,
+        total: fileNames.length,
+    });
 
-            fs.readFile(__dirname + '/' + fileName, function(err, src){
-                if (err) {
-                    throw err
-                };
-                var matches = fileName.match(/(\d+)_(\d+)/),
-                    x = Number(matches[1]),
-                    y = Number(matches[2]);
-
-                process.stdout.write('.');
-
-                var img = new Image;
-                img.src = src;
-                ctx.drawImage(img, x - left, y - top, img.width, img.height);
-                cb();
-            });
-        })
-        .seq(function () {
-            var cb = this;
-            process.stdout.write('\n');
-            fs.writeFile('map.png', canvas.toBuffer(), function () {
-                console.log('map.png ('+ (right - left) + 'x'+ (bottom - top) +') written');
-                cb();
+    var q = queue(30);
+    fileObjs.forEach(function (fileObj) {
+        q.defer(function (callback) {
+            fs.readFile(fileObj.path, function (error, data) {
+                var img = new Image();
+                img.onload = function () {
+                    var x = (fileObj.id * options.width) % width;
+                    var y = ((fileObj.id * options.width) - x) / width * options.height;
+                    ctx.drawImage(img, x, y, img.width, img.height);
+                    bar.tick(1);
+                    callback();
+                }
+                img.onerror = function (e) {
+                    throw e;
+                }
+                img.src = data;
             });
         });
-});
+    });
+    q.awaitAll(function () {
+        fs.writeFile('map.png', canvas.toBuffer(), function () {
+            console.log('map.png ('+ (right - left) + 'x'+ (bottom - top) +') written');
+        });
+    });
 
+});

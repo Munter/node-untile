@@ -9,9 +9,9 @@
   },
   "dependencies": {
     "canvas": "~0.13.1",
-    "glob": "*",
     "optimist": "*",
-    "seq": "*"
+    "progress": "*",
+    "queue-async": "*"
   },
   "repository": "",
   "keywords": [
